@@ -1,0 +1,17 @@
+# 株主優待（手動メンテ）。会社 IR を正とし、変更があれば更新する。
+# ※ サンプルです。内容・換算額・条件は要確認。
+- code: "9861"
+  record_months: [2, 8]
+  tiers:
+    - min_shares: 100
+      content: "飲食券 2,000 円分（年 2 回）"
+      market_value: 2000
+      personal_factor: 0.8        # 自分が使う分だけに割り引く
+    - min_shares: 1000
+      content: "飲食券 5,000 円分（年 2 回）"
+      market_value: 5000
+      personal_factor: 0.6
+  holding_condition:
+    min_years: 0
+    consecutive_records: 0
+  notes: "サンプル"

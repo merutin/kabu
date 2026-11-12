@@ -1,0 +1,19 @@
+# 全体設定
+account: nisa                      # nisa | taxable
+horizons_months: [3, 6, 12]        # 判定に使う保有期間（月）
+primary_horizons_months: [6, 12]   # 最終判定に使う期間
+buy_threshold_annual: 0.05         # BUY とする年率期待トータルリターンの下限
+base_return_annual: 0.03           # 株価部分の基礎期待リターン（年率、控えめな市場平均）
+valuation_max_adj_annual: 0.06     # 割安度による株価期待リターン補正の上限（年率）
+trend_max_adj_annual: 0.04         # トレンドによる補正の上限（年率）
+valuation_lookback_years: 5
+earnings_blackout_days: 3
+record_notice_days: 14
+commission_rate: 0.0
+benchmark_ticker: "1306.T"         # TOPIX 連動 ETF
+cache_dir: data/cache
+cache_max_age_hours: 20
+notify:
+  channels: [stdout]               # stdout | webhook | email
+  webhook_format: slack            # slack | discord
+  only_on_change: false

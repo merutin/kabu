@@ -1,0 +1,9 @@
+# 保有状況（手動メンテ）。松井証券・GMOクリック証券の保有一覧から転記する。
+cash: 0
+holdings: []
+# 例:
+# holdings:
+#   - code: "9861"
+#     shares: 100
+#     avg_cost: 2800
+#     first_bought_on: 2026-04-10   # 継続保有判定に使う
