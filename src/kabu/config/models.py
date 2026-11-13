@@ -84,6 +84,9 @@ class Stock(BaseModel):
     # 配当の権利確定月と、その回ごとの 1 株あたり予想配当（円）。
     # 例: {3: 25, 9: 25}。会社予想を IR で確認して手で更新する。
     dividend_per_record: dict[int, float] = Field(default_factory=dict)
+    # 上記のうち一時的な配当（特別配当・記念配当）の年間合計（円）。
+    # インカムには含めるが、割安度（配当利回りの過去比較）からは除く
+    non_recurring_dividend: float = Field(default=0, ge=0)
     # 権利確定日。null なら月末、整数なら「その日」（20 日決算の会社など）
     record_day: int | None = None
     # 決算発表予定日（分かっている範囲で）。直前の新規買いを避けるため
@@ -99,6 +102,11 @@ class Stock(BaseModel):
     @property
     def annual_dividend_forecast(self) -> float:
         return float(sum(self.dividend_per_record.values()))
+
+    @property
+    def recurring_dividend_forecast(self) -> float:
+        """特別配当などを除いた、来期以降も見込める年間配当。割安度の判定に使う。"""
+        return max(0.0, self.annual_dividend_forecast - self.non_recurring_dividend)
 
     @field_validator("dividend_per_record")
     @classmethod
@@ -128,13 +136,22 @@ class YutaiTier(BaseModel):
     min_shares: int = Field(gt=0)
     content: str
     # 市場換算額（円）。金券ならほぼ額面、割引券なら換金相場の目安
-    market_value: float = Field(ge=0)
+    market_value: float = Field(default=0, ge=0)
+    # 買物額に対する還元率（イオンのオーナーズカードなど）。指定時は
+    # Yutai.assumed_spend_per_record × rate を市場換算額として使う
+    rate: float | None = Field(default=None, ge=0)
     # 自分にとっての価値係数。使わない優待なら 0、確実に使うなら 1.0
     personal_factor: float = Field(default=1.0, ge=0, le=1.5)
+    # この段階に必要な連続記載回数（トヨタの「1 年以上 = 3 回連続」など）。0 なら条件なし
+    min_consecutive_records: int = Field(default=0, ge=0)
 
-    @property
-    def personal_value(self) -> float:
-        return self.market_value * self.personal_factor
+    def value_for(self, spend: float | None) -> float:
+        if self.rate is not None and spend is not None:
+            return spend * self.rate
+        return self.market_value
+
+    def personal_value_for(self, spend: float | None) -> float:
+        return self.value_for(spend) * self.personal_factor
 
 
 class Yutai(BaseModel):
@@ -145,6 +162,14 @@ class Yutai(BaseModel):
     record_day: int | None = None
     tiers: list[YutaiTier]
     holding_condition: HoldingCondition = Field(default_factory=HoldingCondition)
+    # 連続記載回数を数える基準月。省略時は record_months。
+    # 例: トヨタは優待の基準日は 3 月末だけだが、継続保有は 3 月末と 9 月末の名簿で数える
+    holding_check_months: list[int] | None = None
+    # True なら「最初に名簿に載った基準日の月」にしか進呈しない（年 1 回）。
+    # 例: ソフトバンクは 3 月末 or 9 月末のうち保有開始後に先に来た方を起点に年 1 回
+    anniversary_only: bool = False
+    # rate 指定の段階で使う、1 回（半年など）あたりの想定利用額（円）
+    assumed_spend_per_record: float | None = Field(default=None, ge=0)
     # 長期保有で優待が増額される場合など、補足を書く
     notes: str = ""
 
@@ -160,13 +185,29 @@ class Yutai(BaseModel):
 
     @model_validator(mode="after")
     def _sort_tiers(self) -> "Yutai":
-        self.tiers = sorted(self.tiers, key=lambda t: t.min_shares)
+        self.tiers = sorted(self.tiers, key=lambda t: (t.min_shares, t.min_consecutive_records))
+        if self.holding_check_months is not None:
+            self.holding_check_months = sorted(set(self.holding_check_months))
         return self
 
-    def tier_for(self, shares: int) -> YutaiTier | None:
-        """保有株数に対応する優待段階（最も大きい min_shares 以下のもの）。"""
-        matched = [t for t in self.tiers if shares >= t.min_shares]
-        return matched[-1] if matched else None
+    @property
+    def check_months(self) -> list[int]:
+        return self.holding_check_months or self.record_months
+
+    def tier_for(self, shares: int, consecutive_records: int | None = None) -> YutaiTier | None:
+        """保有株数（と連続記載回数）を満たす段階のうち、価値が最大のもの。
+
+        consecutive_records が None なら回数条件を無視する（株数条件だけで判定）。
+        """
+        matched = [
+            t
+            for t in self.tiers
+            if shares >= t.min_shares
+            and (consecutive_records is None or consecutive_records >= t.min_consecutive_records)
+        ]
+        if not matched:
+            return None
+        return max(matched, key=lambda t: (t.personal_value_for(self.assumed_spend_per_record), t.min_shares))
 
     @property
     def min_shares(self) -> int:

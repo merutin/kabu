@@ -79,3 +79,67 @@ def test_consecutive_records_condition():
     s2 = estimate_income(make_stock(), y, 100, date(2026, 11, 12), 12, 0.0, holding=h2)
     months2 = [(e.record.nominal, e.eligible) for e in s2.events if e.kind == "yutai"]
     assert months2 == [(date(2027, 3, 31), False), (date(2027, 9, 30), True)]
+
+
+def test_toyota_style_tiers_by_consecutive_records():
+    # 3 月末のみ基準日、継続保有は 3 月末・9 月末の名簿で数える。1 年未満 500 / 3 回以上 1000 / 7 回以上 3000
+    y = Yutai.model_validate(
+        dict(
+            code="9999", record_months=[3], holding_check_months=[3, 9],
+            tiers=[
+                dict(min_shares=100, content="500円", market_value=500),
+                dict(min_shares=100, content="1000円", market_value=1000, min_consecutive_records=3),
+                dict(min_shares=100, content="3000円", market_value=3000, min_consecutive_records=7),
+            ],
+        )
+    )
+    stock = make_stock(dividend_per_record={})
+    # 新規買い（2026/11）→ 2027/3 は 1 回目 → 500 円
+    s = estimate_income(stock, y, 100, date(2026, 11, 13), 12, 0.0)
+    assert [(e.record.nominal, e.net, e.eligible) for e in s.events] == [(date(2027, 3, 31), 500.0, True)]
+    # 2026/2 から保有 → 2027/3 時点で 3/26, 9/26, 3/27 の 3 回 → 1000 円
+    h = Holding(code="9999", shares=100, avg_cost=1000, first_bought_on=date(2026, 2, 1))
+    s = estimate_income(stock, y, 100, date(2026, 11, 13), 12, 0.0, holding=h)
+    assert s.events[0].net == 1000.0
+    # 2023/1 から保有 → 2027/3 時点で 9 回 → 3000 円
+    h = Holding(code="9999", shares=100, avg_cost=1000, first_bought_on=date(2023, 1, 1))
+    s = estimate_income(stock, y, 100, date(2026, 11, 13), 12, 0.0, holding=h)
+    assert s.events[0].net == 3000.0
+
+
+def test_softbank_style_anniversary_once_a_year():
+    y = Yutai.model_validate(
+        dict(
+            code="9999", record_months=[3, 9], anniversary_only=True,
+            tiers=[dict(min_shares=100, content="PayPay 1000円", market_value=1000)],
+            holding_condition=dict(consecutive_records=3),
+        )
+    )
+    stock = make_stock(dividend_per_record={})
+    # 2026/3/20 に取得（3 月の権利付き最終日前）→ 起点 2026/3 → 2027/3 に初回、2027/9 は対象外
+    h = Holding(code="9999", shares=100, avg_cost=100, first_bought_on=date(2026, 3, 20))
+    s = estimate_income(stock, y, 100, date(2026, 11, 13), 12, 0.0, holding=h)
+    got = [(e.record.nominal, e.eligible) for e in s.events]
+    assert got == [(date(2027, 3, 31), True), (date(2027, 9, 30), False)]
+    assert s.yutai_net == 1000
+    # 新規買い（2026/11）→ 起点 2027/3 → 2028/3 まで受け取れない
+    s = estimate_income(stock, y, 100, date(2026, 11, 13), 12, 0.0)
+    assert s.yutai_net == 0
+    assert all(not e.eligible for e in s.events)
+
+
+def test_rate_based_value_uses_assumed_spend():
+    y = Yutai.model_validate(
+        dict(
+            code="9999", record_months=[2, 8], assumed_spend_per_record=150000,
+            tiers=[
+                dict(min_shares=100, content="1%還元", rate=0.01),
+                dict(min_shares=300, content="3%還元", rate=0.03),
+            ],
+        )
+    )
+    stock = make_stock(dividend_per_record={})
+    s = estimate_income(stock, y, 100, date(2026, 11, 13), 12, 0.0)
+    assert s.yutai_net == 1500 * 2
+    s = estimate_income(stock, y, 300, date(2026, 11, 13), 12, 0.0)
+    assert s.yutai_net == 4500 * 2

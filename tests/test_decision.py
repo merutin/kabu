@@ -68,3 +68,13 @@ def test_taxable_account_reduces_dividend(as_of):
     nisa = judge_stock(_stock(), None, m, Settings(account="nisa"), as_of)
     tax = judge_stock(_stock(), None, m, Settings(account="taxable"), as_of)
     assert tax.estimates[12].income.dividend_net < nisa.estimates[12].income.dividend_net
+
+
+def test_non_recurring_dividend_excluded_from_valuation_and_warned(as_of):
+    data = make_market_data(seed=5)
+    s = _stock(dividend_per_record={12: 167, 6: 0}, non_recurring_dividend=74)
+    assert s.recurring_dividend_forecast == 93
+    m = compute_price_metrics(data, s.recurring_dividend_forecast)
+    j = judge_stock(s, None, m, Settings(), as_of)
+    assert j.estimates[12].income.dividend_net == 167 * 100
+    assert any("特別・記念配当" in w for w in j.warnings)

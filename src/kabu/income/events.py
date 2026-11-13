@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import date
 
-from kabu.calendar import RecordDate, add_months, record_dates_between
+from kabu.calendar import RecordDate, add_months, next_record_date, record_dates_between
 from kabu.config.models import Holding, HoldingCondition, Stock, Yutai
 
 
@@ -58,6 +58,11 @@ def _consecutive_records_held(
     """first_bought_on から target までで、連続して名簿に載った回数（target を含む）。"""
     rds = record_dates_between(first_bought_on, target.nominal, months, day)
     return sum(1 for rd in rds if rd.last_with_rights >= first_bought_on and rd.nominal <= target.nominal)
+
+
+def _first_record_month(first_bought_on: date, months: list[int], day: int | None) -> int:
+    """保有開始後、最初に名簿に載る基準日の月（年 1 回優待の起点）。"""
+    return next_record_date(first_bought_on, months, day).month
 
 
 def yutai_eligibility(
@@ -121,11 +126,17 @@ def estimate_income(
 
     # 優待
     if yutai is not None:
-        tier = yutai.tier_for(shares)
+        check_months = yutai.check_months
+        anniversary_month = (
+            _first_record_month(first_bought_on, yutai.record_months, yutai.record_day)
+            if yutai.anniversary_only
+            else None
+        )
+        spend = yutai.assumed_spend_per_record
         for rd in record_dates_between(as_of, end, yutai.record_months, yutai.record_day):
             if rd.last_with_rights < as_of:
                 continue
-            if tier is None:
+            if yutai.tier_for(shares) is None:
                 summary.events.append(
                     IncomeEvent(
                         kind="yutai", record=rd, gross=0, net=0,
@@ -134,21 +145,26 @@ def estimate_income(
                     )
                 )
                 continue
+            n_records = _consecutive_records_held(first_bought_on, rd, check_months, yutai.record_day)
+            tier = yutai.tier_for(shares, n_records)
             ok, why = yutai_eligibility(
-                yutai.holding_condition, first_bought_on, rd, yutai.record_months, yutai.record_day
+                yutai.holding_condition, first_bought_on, rd, check_months, yutai.record_day
             )
-            value = tier.personal_value
+            if anniversary_month is not None and rd.month != anniversary_month:
+                ok, why = False, f"年 1 回（{anniversary_month}月基準）のため対象外"
+            if tier is None:
+                ok, why = False, f"連続記載 {n_records} 回では対象段階なし"
+                tier = yutai.tier_for(shares)
+                assert tier is not None
+            gross = tier.value_for(spend)
+            value = tier.personal_value_for(spend)
+            desc = f"{rd.month}月権利 優待 {tier.content}"
+            if tier.rate is not None:
+                desc += f"（想定利用額 {spend or 0:,.0f}円 × {tier.rate:.1%}）"
+            if tier.personal_factor != 1:
+                desc += f"（換算 {gross:,.0f}円 × {tier.personal_factor:g}）"
             summary.events.append(
-                IncomeEvent(
-                    kind="yutai",
-                    record=rd,
-                    gross=tier.market_value,
-                    net=value,
-                    description=f"{rd.month}月権利 優待 {tier.content}"
-                    + (f"（換算 {tier.market_value:,.0f}円 × {tier.personal_factor:g}）" if tier.personal_factor != 1 else ""),
-                    eligible=ok,
-                    reason=why,
-                )
+                IncomeEvent(kind="yutai", record=rd, gross=gross, net=value, description=desc, eligible=ok, reason=why)
             )
     summary.events.sort(key=lambda e: e.record.nominal)
     return summary

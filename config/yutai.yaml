@@ -1,17 +1,71 @@
-# 株主優待（手動メンテ）。会社 IR を正とし、変更があれば更新する。
-# ※ サンプルです。内容・換算額・条件は要確認。
-- code: "9861"
-  record_months: [2, 8]
+# 株主優待（手動メンテ）。各社 IR を正とし、変更があれば更新する。確認日: 2026-11-13
+# personal_factor は「自分が使う分だけ」に割り引く係数。要調整。
+
+- code: "9434"
+  # PayPay マネーライト 1,000 円分。100 株以上を 1 年以上保有（3月末・9月末の名簿に同一株主番号で 3 回以上連続記載）。
+  # 保有開始後に先に来る基準日（3月末 or 9月末）を起点に年 1 回。受け取りには株主優待サイトでの申請が必要。
+  record_months: [3, 9]
+  holding_check_months: [3, 9]
+  anniversary_only: true
+  holding_condition:
+    consecutive_records: 3
   tiers:
     - min_shares: 100
-      content: "飲食券 2,000 円分（年 2 回）"
-      market_value: 2000
-      personal_factor: 0.8        # 自分が使う分だけに割り引く
+      content: "PayPayマネーライト 1,000円分（年1回）"
+      market_value: 1000
+      personal_factor: 1.0
+  notes: "2026/11 時点で優待サイトのメンテナンスのため申請受付を一時停止中。再開時期未定"
+
+- code: "7203"
+  # TOYOTA Wallet 残高。基準日は 3 月末のみ。継続保有は 3 月末・9 月末の名簿の連続記載回数で判定
+  # （1年以上 = 3回以上、3年以上 = 7回以上、5年以上 = 11回以上）。
+  record_months: [3]
+  holding_check_months: [3, 9]
+  tiers:
+    - min_shares: 100
+      content: "TOYOTA Wallet 500円分（1年未満）"
+      market_value: 500
+      personal_factor: 0.8
+    - min_shares: 100
+      min_consecutive_records: 3
+      content: "TOYOTA Wallet 1,000円分（1年以上3年未満）"
+      market_value: 1000
+      personal_factor: 0.8
+    - min_shares: 100
+      min_consecutive_records: 7
+      content: "TOYOTA Wallet 3,000円分（3年以上）"
+      market_value: 3000
+      personal_factor: 0.8
     - min_shares: 1000
-      content: "飲食券 5,000 円分（年 2 回）"
-      market_value: 5000
-      personal_factor: 0.6
+      min_consecutive_records: 11
+      content: "TOYOTA Wallet 30,000円分（1,000株以上かつ5年以上）"
+      market_value: 30000
+      personal_factor: 0.8
+  notes: "ほかに全株主対象の抽選優待（レース観戦チケット等）あり。TOYOTA Wallet アプリの登録が必要"
+
+- code: "8267"
+  # イオンオーナーズカード: 半年ごとの買物額（上限 100 万円）× 持株数に応じた返還率を現金で還元。
+  # 価値は自分のイオンでの買物額で決まるので assumed_spend_per_record（半年分の想定利用額）を自分の実態に合わせる。
+  record_months: [2, 8]
+  assumed_spend_per_record: 150000      # 半年あたりのイオングループでの買物額（要調整）
+  tiers:
+    - {min_shares: 100,  content: "オーナーズカード 1%還元", rate: 0.01, personal_factor: 1.0}
+    - {min_shares: 200,  content: "オーナーズカード 2%還元", rate: 0.02, personal_factor: 1.0}
+    - {min_shares: 300,  content: "オーナーズカード 3%還元", rate: 0.03, personal_factor: 1.0}
+    - {min_shares: 1500, content: "オーナーズカード 4%還元", rate: 0.04, personal_factor: 1.0}
+    - {min_shares: 3000, content: "オーナーズカード 5%還元", rate: 0.05, personal_factor: 1.0}
+    - {min_shares: 9000, content: "オーナーズカード 7%還元", rate: 0.07, personal_factor: 1.0}
+  notes: "カード到着は権利確定日から約 2 ヶ月後のため初回の対象期間は短い。お客さま感謝デー 5% 割引、イオンラウンジも利用可。3 年以上かつ 1,500 株以上の長期保有者にはギフトカード（1,000〜10,000 円）があるが未モデル化"
+
+- code: "3633"
+  # GMOクリック証券での当社株買付代金 × 0.03% 相当のビットコイン（上限 10,000 円）。
+  # 100 株以上を 6 ヶ月以上継続保有（6月末・12月末の名簿に 2 回連続記載）が条件。
+  record_months: [6, 12]
   holding_condition:
-    min_years: 0
-    consecutive_records: 0
-  notes: "サンプル"
+    consecutive_records: 2
+  tiers:
+    - min_shares: 100
+      content: "GMOクリック証券での買付代金×0.03%のビットコイン"
+      market_value: 60                 # 100株 × 約2,000円 × 0.03% ≒ 60円（買付額に応じて変わる）
+      personal_factor: 1.0
+  notes: "GMOコインの暗号資産口座が必要。2025/8/7 開示で制度変更済み。金額は小さく、実質は配当目的の銘柄"

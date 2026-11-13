@@ -64,7 +64,7 @@ def run_judge(cfg: AppConfig, as_of: date, source_kind: str) -> tuple[list[Judge
             continue
         md = data[s.code]
         data_date = md.last_date
-        metrics = compute_price_metrics(md, s.annual_dividend_forecast, bench, cfg.settings.valuation_lookback_years)
+        metrics = compute_price_metrics(md, s.recurring_dividend_forecast, bench, cfg.settings.valuation_lookback_years)
         j = judge_stock(s, cfg.yutai.get(s.code), metrics, cfg.settings, as_of, holding=cfg.portfolio.holding_for(s.code))
         judgements.append(j)
     return judgements, data_date
