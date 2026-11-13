@@ -90,6 +90,12 @@ def judge_stock(
         j.warnings.append(
             f"予想配当 {stock.annual_dividend_forecast:g}円のうち {stock.non_recurring_dividend:g}円は特別・記念配当（来期は見込めない）"
         )
+    for ev in longest.income.events:
+        key = f"{ev.record.nominal.year:04d}-{ev.record.month:02d}"
+        if ev.kind == "dividend" and key in stock.dividend_overrides:
+            j.warnings.append(
+                f"{ev.record.nominal:%Y/%m} の配当 {stock.dividend_overrides[key]:g}円は今回限り（平常ベースは {stock.dividend_per_record.get(ev.record.month, 0):g}円）"
+            )
     if metrics.payout_ratio is not None and metrics.payout_ratio > 0.8:
         j.warnings.append(f"配当性向 {metrics.payout_ratio:.0%} と高く、減配リスクに注意")
     if metrics.max_drawdown_1y is not None and metrics.max_drawdown_1y < -0.3:

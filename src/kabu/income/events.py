@@ -111,7 +111,7 @@ def estimate_income(
     for rd in record_dates_between(as_of, end, div_months, stock.record_day):
         if rd.last_with_rights < as_of:
             continue
-        per_share = stock.dividend_per_record[rd.month]
+        per_share = stock.dividend_for(rd.nominal.year, rd.month)
         gross = per_share * shares
         net = gross * (1 - dividend_tax_rate)
         summary.events.append(
@@ -120,7 +120,8 @@ def estimate_income(
                 record=rd,
                 gross=gross,
                 net=net,
-                description=f"{rd.month}月権利 配当 {per_share:g}円 × {shares}株",
+                description=f"{rd.month}月権利 配当 {per_share:g}円 × {shares}株"
+                + ("（特別配当等を含む今回限りの額）" if f"{rd.nominal.year:04d}-{rd.month:02d}" in stock.dividend_overrides else ""),
             )
         )
 

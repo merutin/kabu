@@ -84,6 +84,9 @@ class Stock(BaseModel):
     # 配当の権利確定月と、その回ごとの 1 株あたり予想配当（円）。
     # 例: {3: 25, 9: 25}。会社予想を IR で確認して手で更新する。
     dividend_per_record: dict[int, float] = Field(default_factory=dict)
+    # 特定の権利確定日だけ配当が異なる場合の上書き（"YYYY-MM": 円）。
+    # 例: {"2026-12": 167} … 2026 年 12 月だけ特別配当込み。それ以外の年は dividend_per_record を使う
+    dividend_overrides: dict[str, float] = Field(default_factory=dict)
     # 上記のうち一時的な配当（特別配当・記念配当）の年間合計（円）。
     # インカムには含めるが、割安度（配当利回りの過去比較）からは除く
     non_recurring_dividend: float = Field(default=0, ge=0)
@@ -102,6 +105,22 @@ class Stock(BaseModel):
     @property
     def annual_dividend_forecast(self) -> float:
         return float(sum(self.dividend_per_record.values()))
+
+    def dividend_for(self, year: int, month: int) -> float:
+        """指定の権利確定日に対応する 1 株あたり配当。上書きがあればそれを優先。"""
+        return self.dividend_overrides.get(f"{year:04d}-{month:02d}", self.dividend_per_record.get(month, 0.0))
+
+    @field_validator("dividend_overrides")
+    @classmethod
+    def _check_overrides(cls, v: dict[str, float]) -> dict[str, float]:
+        import re
+
+        for k, amt in v.items():
+            if not re.fullmatch(r"\d{4}-(0[1-9]|1[0-2])", k):
+                raise ValueError(f"dividend_overrides のキーは YYYY-MM 形式にしてください: {k}")
+            if amt < 0:
+                raise ValueError(f"配当額が負です: {amt}")
+        return v
 
     @property
     def recurring_dividend_forecast(self) -> float:

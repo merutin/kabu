@@ -143,3 +143,13 @@ def test_rate_based_value_uses_assumed_spend():
     assert s.yutai_net == 1500 * 2
     s = estimate_income(stock, y, 300, date(2026, 11, 13), 12, 0.0)
     assert s.yutai_net == 4500 * 2
+
+
+def test_dividend_overrides_apply_to_specific_record_only():
+    s = make_stock(dividend_per_record={6: 0, 12: 93}, dividend_overrides={"2026-12": 167})
+    assert s.recurring_dividend_forecast == 93
+    inc = estimate_income(s, None, 100, date(2026, 11, 13), 14, 0.0)
+    got = {(e.record.nominal.year, e.record.month): e.gross for e in inc.events}
+    assert got[(2026, 12)] == 16700
+    assert got[(2027, 6)] == 0
+    assert got[(2027, 12)] == 9300
