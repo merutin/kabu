@@ -271,7 +271,7 @@ holdings:
 | 口座 | NISA | `settings.account: nisa` → 配当税率 0%。`taxable` にすると 20.315% |
 | 優待の価値 | 自分で使う分だけに割引 | 優待ごとに `personal_factor`（0〜1）を持ち、`market_value × personal_factor` で計上 |
 | 判定軸 | 複数軸、基本は半年〜1 年 | 3 / 6 / 12 ヶ月を同時に試算し、6 ヶ月と 12 ヶ月を最終判定に使用 |
-| 出力先 | 通知が欲しい | Slack / Discord Webhook とメール（SMTP）に対応。GitHub Actions で週次実行 |
+| 出力先 | 通知が欲しい | Claude のスケジュールタスク（毎週土曜 08:44 JST）で実行し通知。Slack / Discord Webhook とメール（SMTP）にも対応 |
 | 言語 | Python | Python 3.12+、uv |
 
 ### 11.2 実装済みの構成
@@ -318,7 +318,6 @@ tests/             pytest（カレンダー、インカム、株価指標、判�
 ### 11.5 残課題
 
 - 対象銘柄の決定と、予想配当・優待情報の記入（会社 IR で確認）
-- 実データでの動作確認（開発環境から Yahoo Finance に到達できなかったため、yfinance 経由の取得は未検証）
 - フェーズ 3: バックテストエンジンと閾値の調整
 - 通知先の決定（Slack / Discord / メールのどれを使うか）と Secrets 登録
 - 将来: J-Quants への切り替え、決算発表日の自動取得

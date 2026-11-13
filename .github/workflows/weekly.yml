@@ -1,10 +1,11 @@
 name: weekly-judge
 
+# 定期実行は Claude のスケジュールタスク（毎週土曜 08:44 JST）で行っているため、
+# この workflow は手動起動のみ。GitHub Actions で定期実行したい場合は schedule を有効にする。
 on:
-  schedule:
-    # 毎週土曜 09:00 JST（= 金曜 24:00 UTC）。GitHub の cron は UTC
-    - cron: "0 0 * * 6"
   workflow_dispatch:
+  # schedule:
+  #   - cron: "0 0 * * 6"   # 毎週土曜 09:00 JST（GitHub の cron は UTC）
 
 permissions:
   contents: write

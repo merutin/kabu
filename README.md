@@ -30,9 +30,11 @@ uv venv && uv pip install -e ".[dev]"
 
    ネットワーク無しで動作確認するには `--source demo`（合成データ）。
 
-4. 通知する場合は `config/settings.yaml` の `notify.channels` に `webhook` または `email` を加え、
-   環境変数（`KABU_WEBHOOK_URL`、または `KABU_SMTP_*` と `KABU_MAIL_TO`）を設定して `--notify` を付ける。
-   `.github/workflows/weekly.yml` で毎週土曜朝に自動実行できる（Secrets に同名で登録）。
+4. 定期実行は Claude のスケジュールタスク「kabu 週次判定」（毎週土曜 08:44 JST）で行い、
+   結果は Claude の通知で届く。スケジュールは claude.ai のスケジュールタスク画面から変更できる。
+   Slack / Discord / メールに直接送りたい場合は `config/settings.yaml` の `notify.channels` に
+   `webhook` または `email` を加え、環境変数（`KABU_WEBHOOK_URL`、または `KABU_SMTP_*` と
+   `KABU_MAIL_TO`）を設定して `--notify` を付ける。`.github/workflows/weekly.yml` は手動起動用。
 
 ## テスト
 
