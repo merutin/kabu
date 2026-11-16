@@ -86,6 +86,7 @@ def judge_stock(
     j.reasons.append(f"トレンド: {trend}" + (f"（200日線比 {metrics.sma200_ratio:+.1%}）" if metrics.sma200_ratio is not None else ""))
 
     # --- 警告（リスク） ---
+    j.warnings.extend(stock.alerts)
     if stock.non_recurring_dividend > 0:
         j.warnings.append(
             f"予想配当 {stock.annual_dividend_forecast:g}円のうち {stock.non_recurring_dividend:g}円は特別・記念配当（来期は見込めない）"

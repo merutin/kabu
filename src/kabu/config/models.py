@@ -96,6 +96,8 @@ class Stock(BaseModel):
     earnings_dates: list[date] = Field(default_factory=list)
     # yfinance 用ティッカー。省略時は "{code}.T"
     ticker: str | None = None
+    # レポートの「注意」に毎回出す重要事項（上場廃止予定、優待制度の変更予定など）
+    alerts: list[str] = Field(default_factory=list)
     notes: str = ""
 
     @property

@@ -78,3 +78,10 @@ def test_non_recurring_dividend_excluded_from_valuation_and_warned(as_of):
     j = judge_stock(s, None, m, Settings(), as_of)
     assert j.estimates[12].income.dividend_net == 167 * 100
     assert any("特別・記念配当" in w for w in j.warnings)
+
+
+def test_stock_alerts_appear_in_warnings(as_of):
+    data = make_market_data(seed=5)
+    m = compute_price_metrics(data, 80.0)
+    j = judge_stock(_stock(alerts=["上場廃止予定"]), None, m, Settings(), as_of)
+    assert "上場廃止予定" in j.warnings
