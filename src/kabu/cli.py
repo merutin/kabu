@@ -1,6 +1,6 @@
 """コマンドライン入口。
 
-  kabu judge  [--as-of YYYY-MM-DD] [--source yfinance|demo] [--out reports] [--notify] [--config DIR]
+  kabu judge  [--as-of YYYY-MM-DD] [--source yfinance|demo] [--out reports] [--notify] [--compare-days 7] [--config DIR]
   kabu fetch  [--force] [--config DIR]
   kabu income [--as-of YYYY-MM-DD] [--config DIR]
 """
@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import argparse
 import sys
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 
 from kabu.config import AppConfig, load_config
@@ -55,29 +55,49 @@ def cmd_fetch(args) -> int:
     return 0 if data else 1
 
 
-def run_judge(cfg: AppConfig, as_of: date, source_kind: str) -> tuple[list[Judgement], date | None]:
-    data, bench = _fetch_all(cfg, _source(cfg, source_kind, as_of))
-    judgements: list[Judgement] = []
-    data_date = None
+def _judge_all(
+    cfg: AppConfig, data: dict[str, MarketData], bench: MarketData | None, as_of: date
+) -> list[Judgement]:
+    out: list[Judgement] = []
     for s in cfg.stocks:
         if s.code not in data:
             continue
         md = data[s.code]
-        data_date = md.last_date
+        if len(md.close) < 2:
+            continue
+        holding = cfg.portfolio.holding_for(s.code)
+        if holding and holding.first_bought_on > as_of:
+            holding = None  # その時点ではまだ保有していない
         metrics = compute_price_metrics(md, s.recurring_dividend_forecast, bench, cfg.settings.valuation_lookback_years)
-        j = judge_stock(s, cfg.yutai.get(s.code), metrics, cfg.settings, as_of, holding=cfg.portfolio.holding_for(s.code))
-        judgements.append(j)
-    return judgements, data_date
+        out.append(judge_stock(s, cfg.yutai.get(s.code), metrics, cfg.settings, as_of, holding=holding))
+    return out
+
+
+def run_judge(
+    cfg: AppConfig, as_of: date, source_kind: str, compare_days: int = 0
+) -> tuple[list[Judgement], date | None, dict[str, Judgement]]:
+    """判定を実行する。compare_days > 0 なら、同じデータを compare_days 日前で切って
+    その時点の判定も再計算し、{証券コード: 前回判定} として返す。"""
+    data, bench = _fetch_all(cfg, _source(cfg, source_kind, as_of))
+    judgements = _judge_all(cfg, data, bench, as_of)
+    data_date = max((d.last_date for d in data.values()), default=None)
+    previous: dict[str, Judgement] = {}
+    if compare_days > 0 and judgements:
+        prev_as_of = as_of - timedelta(days=compare_days)
+        prev_data = {k: v.truncate(prev_as_of) for k, v in data.items()}
+        prev_bench = bench.truncate(prev_as_of) if bench is not None else None
+        previous = {j.stock.code: j for j in _judge_all(cfg, prev_data, prev_bench, prev_as_of)}
+    return judgements, data_date, previous
 
 
 def cmd_judge(args) -> int:
     cfg = load_config(args.config)
     as_of = date.fromisoformat(args.as_of) if args.as_of else date.today()
-    judgements, data_date = run_judge(cfg, as_of, args.source)
+    judgements, data_date, previous = run_judge(cfg, as_of, args.source, args.compare_days)
     if not judgements:
         print("判定できる銘柄がありません（データ取得に失敗）", file=sys.stderr)
         return 1
-    report = render_report(judgements, cfg.settings, as_of, data_date)
+    report = render_report(judgements, cfg.settings, as_of, data_date, previous, args.compare_days)
     out_dir = Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)
     path = out_dir / f"report_{as_of:%Y%m%d}.md"
@@ -86,7 +106,8 @@ def cmd_judge(args) -> int:
     print(report)
     if args.notify:
         sent = send_notifications(
-            judgements, cfg.settings.notify, f"株式判定 {as_of:%Y-%m-%d}", report, out_dir / ".last_verdicts.json"
+            judgements, cfg.settings.notify, f"株式判定 {as_of:%Y-%m-%d}", report, out_dir / ".last_verdicts.json",
+            previous=previous,
         )
         print(f"\n通知: {', '.join(sent) if sent else '変化なしのため送信せず'}", file=sys.stderr)
     print(f"\nレポート: {path}", file=sys.stderr)
@@ -123,6 +144,10 @@ def main(argv: list[str] | None = None) -> int:
     pj.add_argument("--source", choices=["yfinance", "demo"], default="yfinance")
     pj.add_argument("--out", default="reports")
     pj.add_argument("--notify", action="store_true", help="settings.yaml の notify.channels に通知する")
+    pj.add_argument(
+        "--compare-days", type=int, default=7,
+        help="この日数前の時点の判定を同じデータから再計算して比較する（0 で無効、既定 7）",
+    )
     pj.set_defaults(func=cmd_judge)
 
     pf = sub.add_parser("fetch", parents=[common], help="株価データを取得してキャッシュ")

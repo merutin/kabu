@@ -30,6 +30,19 @@ class MarketData:
     def close(self) -> pd.Series:
         return self.prices["Close"].dropna()
 
+    def truncate(self, until: date) -> "MarketData":
+        """until 以前のデータだけにした複製（過去時点の判定を再現するため）。
+
+        info（PER 等）は取得時点の値のまま引き継ぐ。
+        """
+        ts = pd.Timestamp(until)
+        return MarketData(
+            ticker=self.ticker,
+            prices=self.prices[self.prices.index <= ts],
+            dividends=self.dividends[self.dividends.index <= ts],
+            info=dict(self.info),
+        )
+
     @property
     def last_close(self) -> float:
         return float(self.close.iloc[-1])

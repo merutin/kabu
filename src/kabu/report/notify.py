@@ -16,8 +16,13 @@ from kabu.config.models import NotifySettings
 from kabu.decision import Judgement
 
 
-def summary_text(judgements: list[Judgement], title: str) -> str:
+def summary_text(judgements: list[Judgement], title: str, previous: dict[str, Judgement] | None = None) -> str:
+    from kabu.report.markdown import verdict_changes
+
     lines = [title]
+    if previous:
+        changes = verdict_changes(judgements, previous)
+        lines.append("判定の変化: " + ("、".join(changes) if changes else "なし"))
     for j in judgements:
         h = max(j.estimates)
         e = j.estimates[h]
@@ -77,12 +82,13 @@ def send_notifications(
     title: str,
     full_report: str,
     state_path: Path,
+    previous: dict[str, Judgement] | None = None,
 ) -> list[str]:
     """設定されたチャネルに通知する。送った先の名前を返す。"""
     changed = _changed_since_last(judgements, state_path)
     if settings.only_on_change and not changed:
         return []
-    text = summary_text(judgements, title)
+    text = summary_text(judgements, title, previous)
     sent: list[str] = []
     for ch in settings.channels:
         if ch == "stdout":

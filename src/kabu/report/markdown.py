@@ -14,16 +14,35 @@ def _pct(x: float | None, digits: int = 1) -> str:
     return "-" if x is None else f"{x:+.{digits}%}"
 
 
-def render_summary_table(judgements: list[Judgement], settings: Settings) -> str:
+def verdict_changes(judgements: list[Judgement], previous: dict[str, Judgement]) -> list[str]:
+    """前回から判定が変わった銘柄の説明文。"""
+    out = []
+    for j in judgements:
+        p = previous.get(j.stock.code)
+        if p is not None and p.verdict != j.verdict:
+            out.append(
+                f"{j.stock.code} {j.stock.name}: {p.verdict.value} → {j.verdict.value}"
+                f"（株価 {p.metrics.last_close:,.0f} → {j.metrics.last_close:,.0f} 円）"
+            )
+    return out
+
+
+def render_summary_table(
+    judgements: list[Judgement], settings: Settings, previous: dict[str, Judgement] | None = None, compare_days: int = 0
+) -> str:
     h = settings.primary_horizons_months[-1]
-    lines = [
-        f"| 銘柄 | 判定 | 株価 | {h}ヶ月 期待TR | インカム(年率) | 割安度 | トレンド |",
-        "|---|---|---:|---:|---:|---|---|",
-    ]
+    prev_col = bool(previous)
+    head = f"| 銘柄 | 判定 |" + (f" {compare_days}日前 |" if prev_col else "") + f" 株価 | {h}ヶ月 期待TR | インカム(年率) | 割安度 | トレンド |"
+    sep = "|---|---|" + ("---|" if prev_col else "") + "---:|---:|---:|---|---|"
+    lines = [head, sep]
     for j in judgements:
         e = j.estimates[h]
+        prev = ""
+        if prev_col:
+            p = previous.get(j.stock.code)
+            prev = f" {p.verdict.value} |" if p else " - |"
         lines.append(
-            f"| {j.stock.code} {j.stock.name} | {_ICON[j.verdict.value]} {j.verdict.value} | {j.metrics.last_close:,.0f} "
+            f"| {j.stock.code} {j.stock.name} | {_ICON[j.verdict.value]} {j.verdict.value} |{prev} {j.metrics.last_close:,.0f} "
             f"| {_pct(e.total_mid)} ({_pct(e.total_low)}〜{_pct(e.total_high)}) | {e.income_return_annual:.2%} "
             f"| {j.metrics.valuation_label.split('（')[0]} | {j.metrics.trend_label} |"
         )
@@ -83,14 +102,29 @@ def render_stock(j: Judgement, settings: Settings) -> str:
     return "\n".join(out)
 
 
-def render_report(judgements: list[Judgement], settings: Settings, as_of: date, data_date: date | None = None) -> str:
+def render_report(
+    judgements: list[Judgement],
+    settings: Settings,
+    as_of: date,
+    data_date: date | None = None,
+    previous: dict[str, Judgement] | None = None,
+    compare_days: int = 0,
+) -> str:
     parts = [f"# 株式判定レポート {as_of:%Y-%m-%d}", ""]
+    if previous:
+        changes = verdict_changes(judgements, previous)
+        if changes:
+            parts.append(f"**{compare_days}日前から判定が変わった銘柄**")
+            parts += [f"- {c}" for c in changes]
+        else:
+            parts.append(f"{compare_days}日前から判定の変化はありません。")
+        parts.append("")
     if data_date and data_date != as_of:
         parts.append(f"株価データ基準日: {data_date:%Y-%m-%d}")
         parts.append("")
     parts.append(f"口座: {settings.account.value.upper()} / 判定の基準期間: {' / '.join(f'{h}ヶ月' for h in settings.primary_horizons_months)} / BUY 閾値: 年率 {settings.buy_threshold_annual:.0%}")
     parts.append("")
-    parts.append(render_summary_table(judgements, settings))
+    parts.append(render_summary_table(judgements, settings, previous, compare_days))
     parts.append("")
     for j in judgements:
         parts.append(render_stock(j, settings))
